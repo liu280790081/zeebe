@@ -8,6 +8,8 @@
 package io.zeebe.engine.state;
 
 import io.zeebe.db.DbContext;
+import io.zeebe.db.DbKey;
+import io.zeebe.db.DbValue;
 import io.zeebe.db.ZeebeDb;
 import io.zeebe.engine.state.deployment.DbDeploymentState;
 import io.zeebe.engine.state.deployment.DbWorkflowState;
@@ -39,6 +41,7 @@ import io.zeebe.engine.state.processing.DbBlackListState;
 import io.zeebe.engine.state.processing.DbKeyGenerator;
 import io.zeebe.engine.state.processing.DbLastProcessedPositionState;
 import io.zeebe.protocol.Protocol;
+import java.util.function.BiConsumer;
 
 public class ZeebeState {
 
@@ -158,5 +161,14 @@ public class ZeebeState {
 
   public MutableEventScopeInstanceState getEventScopeInstanceState() {
     return eventScopeInstanceState;
+  }
+
+  public <KeyType extends DbKey, ValueType extends DbValue> void visit(
+      final ZbColumnFamilies column,
+      final KeyType keyInstance,
+      final ValueType valueInstance,
+      final BiConsumer<KeyType, ValueType> visitor) {
+    final var newContext = zeebeDb.createContext();
+    zeebeDb.visit(column, newContext, keyInstance, valueInstance, visitor);
   }
 }
