@@ -30,16 +30,18 @@ public class ColumnFamilyContext {
 
   private final Queue<ExpandableArrayBuffer> prefixKeyBuffers;
   private int keyLength;
+  private final long columnFamilyPrefix;
 
-  ColumnFamilyContext() {
+  ColumnFamilyContext(final long columnFamilyPrefix) {
+    this.columnFamilyPrefix = columnFamilyPrefix;
     prefixKeyBuffers = new ArrayDeque<>();
     prefixKeyBuffers.add(new ExpandableArrayBuffer());
     prefixKeyBuffers.add(new ExpandableArrayBuffer());
   }
 
-  public void writeKey(final long keyPrefix, final DbKey key) {
+  public void writeKey(final DbKey key) {
     keyLength = 0;
-    keyBuffer.putLong(0, keyPrefix, ZeebeDbConstants.ZB_DB_BYTE_ORDER);
+    keyBuffer.putLong(0, columnFamilyPrefix, ZeebeDbConstants.ZB_DB_BYTE_ORDER);
     keyLength += Long.BYTES;
     key.write(keyBuffer, Long.BYTES);
     keyLength += key.getLength();
@@ -94,16 +96,15 @@ public class ColumnFamilyContext {
     return valueViewBuffer.capacity() == ZERO_SIZE_ARRAY.length;
   }
 
-  public void withPrefixKey(
-      final long keyPrefix, final DbKey key, final ObjIntConsumer<byte[]> prefixKeyConsumer) {
+  public void withPrefixKey(final DbKey key, final ObjIntConsumer<byte[]> prefixKeyConsumer) {
     if (prefixKeyBuffers.peek() == null) {
       throw new IllegalStateException(
           "Currently nested prefix iterations are not supported! This will cause unexpected behavior.");
     }
+
     final ExpandableArrayBuffer prefixKeyBuffer = prefixKeyBuffers.remove();
     try {
-
-      prefixKeyBuffer.putLong(0, keyPrefix, ZeebeDbConstants.ZB_DB_BYTE_ORDER);
+      prefixKeyBuffer.putLong(0, columnFamilyPrefix, ZeebeDbConstants.ZB_DB_BYTE_ORDER);
       key.write(prefixKeyBuffer, Long.BYTES);
       final int prefixLength = Long.BYTES + key.getLength();
 

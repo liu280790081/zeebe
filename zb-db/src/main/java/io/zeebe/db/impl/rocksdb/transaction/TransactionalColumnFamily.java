@@ -32,7 +32,6 @@ class TransactionalColumnFamily<
 
   private final ValueType valueInstance;
   private final KeyType keyInstance;
-  private final ColumnFamilyNames columnFamilyName;
   private final ColumnFamilyContext columnFamilyContext;
 
   TransactionalColumnFamily(
@@ -45,8 +44,7 @@ class TransactionalColumnFamily<
     this.context = context;
     this.keyInstance = keyInstance;
     this.valueInstance = valueInstance;
-    columnFamilyName = columnFamily;
-    columnFamilyContext = new ColumnFamilyContext();
+    columnFamilyContext = new ColumnFamilyContext(columnFamily.ordinal());
   }
 
   private void ensureInOpenTransaction(
@@ -60,7 +58,7 @@ class TransactionalColumnFamily<
     ensureInOpenTransaction(
         context,
         transaction -> {
-          columnFamilyContext.writeKey(columnFamilyName.ordinal(), key);
+          columnFamilyContext.writeKey(key);
           columnFamilyContext.writeValue(value);
 
           transaction.put(
@@ -74,7 +72,7 @@ class TransactionalColumnFamily<
 
   @Override
   public ValueType get(final KeyType key) {
-    columnFamilyContext.writeKey(columnFamilyName.ordinal(), key);
+    columnFamilyContext.writeKey(key);
     final DirectBuffer valueBuffer = getValue(context, columnFamilyContext);
     if (valueBuffer != null) {
       valueInstance.wrap(valueBuffer, 0, valueBuffer.capacity());
@@ -128,7 +126,7 @@ class TransactionalColumnFamily<
 
   @Override
   public void delete(final KeyType key) {
-    columnFamilyContext.writeKey(columnFamilyName.ordinal(), key);
+    columnFamilyContext.writeKey(key);
     ensureInOpenTransaction(
         context,
         transaction ->
@@ -144,7 +142,7 @@ class TransactionalColumnFamily<
     ensureInOpenTransaction(
         context,
         transaction -> {
-          columnFamilyContext.writeKey(columnFamilyName.ordinal(), key);
+          columnFamilyContext.writeKey(key);
           getValue(context, columnFamilyContext);
         });
     return !columnFamilyContext.isValueViewEmpty();
@@ -155,7 +153,6 @@ class TransactionalColumnFamily<
     final AtomicBoolean isEmpty = new AtomicBoolean(true);
     whileEqualPrefix(
         context,
-        columnFamilyName,
         keyInstance,
         valueInstance,
         (key, value) -> {
@@ -168,7 +165,6 @@ class TransactionalColumnFamily<
   public void forEach(final TransactionContext context, final Consumer<ValueType> consumer) {
     whileEqualPrefix(
         context,
-        columnFamilyName,
         keyInstance,
         valueInstance,
         (BiConsumer<KeyType, ValueType>) (ignore, value) -> consumer.accept(value));
@@ -176,26 +172,26 @@ class TransactionalColumnFamily<
 
   public void forEach(
       final TransactionContext context, final BiConsumer<KeyType, ValueType> consumer) {
-    whileEqualPrefix(context, columnFamilyName, keyInstance, valueInstance, consumer);
+    whileEqualPrefix(context, keyInstance, valueInstance, consumer);
   }
 
   public void whileTrue(
       final TransactionContext context, final KeyValuePairVisitor<KeyType, ValueType> visitor) {
-    whileEqualPrefix(context, columnFamilyName, keyInstance, valueInstance, visitor);
+    whileEqualPrefix(context, keyInstance, valueInstance, visitor);
   }
 
   public void whileEqualPrefix(
       final TransactionContext context,
       final DbKey keyPrefix,
       final BiConsumer<KeyType, ValueType> visitor) {
-    whileEqualPrefix(context, columnFamilyName, keyPrefix, keyInstance, valueInstance, visitor);
+    whileEqualPrefix(context, keyPrefix, keyInstance, valueInstance, visitor);
   }
 
   public void whileEqualPrefix(
       final TransactionContext context,
       final DbKey keyPrefix,
       final KeyValuePairVisitor<KeyType, ValueType> visitor) {
-    whileEqualPrefix(context, columnFamilyName, keyPrefix, keyInstance, valueInstance, visitor);
+    whileEqualPrefix(context, keyPrefix, keyInstance, valueInstance, visitor);
   }
 
   RocksIterator newIterator(final TransactionContext context, final ReadOptions options) {
@@ -205,14 +201,12 @@ class TransactionalColumnFamily<
 
   protected <KeyType extends DbKey, ValueType extends DbValue> void whileEqualPrefix(
       final TransactionContext context,
-      final ColumnFamilyNames columnFamilyName,
       final DbKey prefix,
       final KeyType keyInstance,
       final ValueType valueInstance,
       final BiConsumer<KeyType, ValueType> visitor) {
     whileEqualPrefix(
         context,
-        columnFamilyName,
         prefix,
         keyInstance,
         valueInstance,
@@ -228,13 +222,11 @@ class TransactionalColumnFamily<
    */
   protected <KeyType extends DbKey, ValueType extends DbValue> void whileEqualPrefix(
       final TransactionContext context,
-      final ColumnFamilyNames columnFamilyName,
       final KeyType keyInstance,
       final ValueType valueInstance,
       final BiConsumer<KeyType, ValueType> visitor) {
     whileEqualPrefix(
         context,
-        columnFamilyName,
         new DbNullKey(),
         keyInstance,
         valueInstance,
@@ -250,12 +242,10 @@ class TransactionalColumnFamily<
    */
   protected <KeyType extends DbKey, ValueType extends DbValue> void whileEqualPrefix(
       final TransactionContext context,
-      final ColumnFamilyNames columnFamilyName,
       final KeyType keyInstance,
       final ValueType valueInstance,
       final KeyValuePairVisitor<KeyType, ValueType> visitor) {
-    whileEqualPrefix(
-        context, columnFamilyName, new DbNullKey(), keyInstance, valueInstance, visitor);
+    whileEqualPrefix(context, new DbNullKey(), keyInstance, valueInstance, visitor);
   }
 
   /**
@@ -269,13 +259,11 @@ class TransactionalColumnFamily<
    */
   protected <KeyType extends DbKey, ValueType extends DbValue> void whileEqualPrefix(
       final TransactionContext context,
-      final ColumnFamilyNames columnFamilyName,
       final DbKey prefix,
       final KeyType keyInstance,
       final ValueType valueInstance,
       final KeyValuePairVisitor<KeyType, ValueType> visitor) {
     columnFamilyContext.withPrefixKey(
-        columnFamilyName.ordinal(),
         prefix,
         (prefixKey, prefixLength) ->
             ensureInOpenTransaction(
